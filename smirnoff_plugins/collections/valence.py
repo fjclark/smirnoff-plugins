@@ -299,13 +299,18 @@ with open("{esp_omm_system_file.name}", "w") as f:
             "HarmonicAngleForce",
             "PeriodicTorsionForce",
         ]
-        for force in system.getForces():
-            if force.getName() in force_types_to_replace:
-                system.removeForce(force)
+        # for force in system.getForces():
+        #     if force.getName() in force_types_to_replace:
+        #         system.removeForce(force)
+
+        # for force in esp_system.getForces():
+        #     if force.getName() in force_types_to_replace:
+        #         system.addForce(copy.deepcopy(force))
+        while system.getNumForces() > 0:
+            system.removeForce(0)
 
         for force in esp_system.getForces():
-            if force.getName() in force_types_to_replace:
-                system.addForce(copy.deepcopy(force))
+            system.addForce(copy.deepcopy(force))
 
     # def modify_openmm_forces(
     #     self,
