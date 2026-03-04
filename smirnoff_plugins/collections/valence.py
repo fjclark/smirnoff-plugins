@@ -15,7 +15,7 @@ from openmm import openmm
 from smirnoff_plugins.handlers.valence import (
     EspalomaValenceHandler,
     UreyBradleyHandler,
-    OpenmmlValenceHandler,
+    OpenmmmlValenceHandler,
 )
 
 
@@ -121,10 +121,10 @@ class SMIRNOFFUreyBradleyCollection(SMIRNOFFCollection):
             )
 
 
-class OpenmmlValenceCollection(SMIRNOFFCollection):
+class OpenmmmlValenceCollection(SMIRNOFFCollection):
     is_plugin: bool = True
 
-    type: Literal["OpenmmlValence"] = "OpenmmlValence"
+    type: Literal["OpenmmmlValence"] = "OpenmmmlValence"
 
     expression: Literal[""] = ""
 
@@ -134,7 +134,7 @@ class OpenmmlValenceCollection(SMIRNOFFCollection):
     @classmethod
     def allowed_parameter_handlers(cls) -> Iterable[Type[ParameterHandler]]:
         """Return an iterable of allowed types of ParameterHandler classes."""
-        return (OpenmmlValenceHandler,)
+        return (OpenmmmlValenceHandler,)
 
     @classmethod
     def supported_parameters(cls) -> Iterable[str]:
@@ -151,7 +151,7 @@ class OpenmmlValenceCollection(SMIRNOFFCollection):
     #     """Return all angles in this topology."""
     #     return [(angle[0], angle[2]) for angle in topology.angles]
 
-    def store_potentials(self, parameter_handler: OpenmmlValenceHandler) -> None:
+    def store_potentials(self, parameter_handler: OpenmmmlValenceHandler) -> None:
         """Store the potentials from the parameter handler."""
         self.model_name = parameter_handler.model_name
         self.model_path = parameter_handler.model_path
@@ -171,7 +171,7 @@ class OpenmmlValenceCollection(SMIRNOFFCollection):
 
         if self.model_path is None:
             raise ValueError(
-                "model_path must be specified for OpenmmlValenceCollection/OpenmmlValenceHandler"
+                "model_path must be specified for OpenmmmlValenceCollection/OpenmmmlValenceHandler"
             )
 
         mlp = MLPotential(self.model_name, modelPath=self.model_path)

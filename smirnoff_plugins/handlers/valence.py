@@ -62,10 +62,10 @@ class EspalomaValenceHandler(ParameterHandler):
             )
 
 
-class OpenmmlValenceHandler(ParameterHandler):
+class OpenmmmlValenceHandler(ParameterHandler):
     """ParameterHandler for applying valence parameters from the OpenmmML model."""
 
-    _TAGNAME = "OpenmmlValence"
+    _TAGNAME = "OpenmmmlValence"
     _DEPENDENCIES = []
     _INFOTYPE = None  # No separate parameter types; just a model path
 
@@ -74,7 +74,7 @@ class OpenmmlValenceHandler(ParameterHandler):
 
     def check_handler_compatibility(
         self,
-        other_handler: "OpenmmlValenceHandler",
+        other_handler: "OpenmmmlValenceHandler",
         assume_missing_is_default: bool = True,
     ):
         """
@@ -93,7 +93,7 @@ class OpenmmlValenceHandler(ParameterHandler):
             self.model_path != other_handler.model_path
         ):
             raise IncompatibleParameterError(
-                "Attempted to initialize two OpenmmlValence sections with different "
+                "Attempted to initialize two OpenmmmlValence sections with different "
                 "models: "
                 f"{self.model_name=} is not identical to {other_handler.model_name=} "
                 "or "
