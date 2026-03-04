@@ -169,11 +169,6 @@ class OpenmmmlValenceCollection(SMIRNOFFCollection):
 
         assert len(interchange.topology._molecules) == 1
 
-        if self.model_path is None:
-            raise ValueError(
-                "model_path must be specified for OpenmmmlValenceCollection/OpenmmmlValenceHandler"
-            )
-
         mlp = MLPotential(self.model_name, modelPath=self.model_path)
 
         new_system = mlp.createSystem(
