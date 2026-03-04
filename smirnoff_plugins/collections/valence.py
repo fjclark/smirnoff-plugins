@@ -11,10 +11,11 @@ from openff.toolkit import unit as off_unit
 from openff.toolkit.typing.engines.smirnoff.parameters import ParameterHandler
 from openmm import openmm
 
+
 from smirnoff_plugins.handlers.valence import (
     EspalomaValenceHandler,
     UreyBradleyHandler,
-    Egret1ValenceHandler,
+    OpenmmlValenceHandler,
 )
 
 
@@ -120,17 +121,20 @@ class SMIRNOFFUreyBradleyCollection(SMIRNOFFCollection):
             )
 
 
-class Egret1ValenceCollection(SMIRNOFFCollection):
+class OpenmmlValenceCollection(SMIRNOFFCollection):
     is_plugin: bool = True
 
-    type: Literal["Egret1Valence"] = "Egret1Valence"
+    type: Literal["OpenmmlValence"] = "OpenmmlValence"
 
     expression: Literal[""] = ""
+
+    model_name: str = "aceff-2.0"
+    model_path: Union[str, None] = None
 
     @classmethod
     def allowed_parameter_handlers(cls) -> Iterable[Type[ParameterHandler]]:
         """Return an iterable of allowed types of ParameterHandler classes."""
-        return (Egret1ValenceHandler,)
+        return (OpenmmlValenceHandler,)
 
     @classmethod
     def supported_parameters(cls) -> Iterable[str]:
@@ -147,9 +151,10 @@ class Egret1ValenceCollection(SMIRNOFFCollection):
     #     """Return all angles in this topology."""
     #     return [(angle[0], angle[2]) for angle in topology.angles]
 
-    def store_potentials(self, parameter_handler: UreyBradleyHandler) -> None:
+    def store_potentials(self, parameter_handler: OpenmmlValenceHandler) -> None:
         """Store the potentials from the parameter handler."""
-        pass
+        self.model_name = parameter_handler.model_name
+        self.model_path = parameter_handler.model_path
 
     def modify_openmm_forces(
         self,
@@ -160,33 +165,17 @@ class Egret1ValenceCollection(SMIRNOFFCollection):
         particle_map: Dict[Union[int, "VirtualSiteKey"], int],
     ) -> None:
         import copy
-
-        def get_egret_1() -> "MLPotential":
-            """Get the Egret-1 MLPotential from GitHub."""
-            from openmmml import MLPotential
-            import atexit
-            import urllib.request
-            import os
-            import tempfile
-
-            # Model accessed 24/05/25
-            url = "https://github.com/rowansci/egret-public/raw/227d6641e6851eb1037d48712462e4ce61c1518f/compiled_models/EGRET_1.model"
-            tmp_file = tempfile.NamedTemporaryFile(suffix=".model", delete=False)
-            tmp_file.close()  # Close so urllib can write to it
-            urllib.request.urlretrieve(url, filename=tmp_file.name)
-
-            # Register file for deletion at program exit
-            atexit.register(
-                lambda: (
-                    os.remove(tmp_file.name) if os.path.exists(tmp_file.name) else None
-                )
-            )
-
-            return MLPotential("mace", modelPath=tmp_file.name)
+        from openmmml import MLPotential
 
         assert len(interchange.topology._molecules) == 1
 
-        mlp = get_egret_1()
+        if self.model_path is None:
+            raise ValueError(
+                "model_path must be specified for OpenmmlValenceCollection/OpenmmlValenceHandler"
+            )
+
+        mlp = MLPotential(self.model_name, modelPath=self.model_path)
+
         new_system = mlp.createSystem(
             interchange.topology.to_openmm(),
         )
@@ -204,6 +193,8 @@ class EspalomaValenceCollection(SMIRNOFFCollection):
     type: Literal["EspalomaValence"] = "EspalomaValence"
 
     expression: Literal[""] = ""
+
+    espaloma_python_path: Union[str, None] = None
 
     @classmethod
     def allowed_parameter_handlers(cls) -> Iterable[Type[ParameterHandler]]:
@@ -225,9 +216,9 @@ class EspalomaValenceCollection(SMIRNOFFCollection):
     #     """Return all angles in this topology."""
     #     return [(angle[0], angle[2]) for angle in topology.angles]
 
-    def store_potentials(self, parameter_handler: UreyBradleyHandler) -> None:
+    def store_potentials(self, parameter_handler: EspalomaValenceHandler) -> None:
         """Store the potentials from the parameter handler."""
-        pass
+        self.espaloma_python_path = parameter_handler.espaloma_python_path
 
     def modify_openmm_forces(
         self,
@@ -246,6 +237,11 @@ class EspalomaValenceCollection(SMIRNOFFCollection):
         # due to requirements conflicts (pydantic...)
         import copy
         import tempfile
+
+        if self.espaloma_python_path is None:
+            raise ValueError(
+                "espaloma_python_path must be specified for EspalomaValenceCollection/EspalomaValenceHandler"
+            )
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as script_file:
             with tempfile.NamedTemporaryFile(
@@ -275,14 +271,10 @@ with open("{esp_omm_system_file.name}", "w") as f:
                 with open(script_file.name, "w") as f:
                     f.write(script)
 
-                ESP_ENV_PYTHON = (
-                    "/home/campus.ncl.ac.uk/nfc78/miniforge3/envs/espaloma/bin/python"
-                )
-
                 import subprocess
 
                 subprocess.run(
-                    [ESP_ENV_PYTHON, script_file.name],
+                    [self.espaloma_python_path, script_file.name],
                     check=True,
                 )
 
@@ -292,67 +284,10 @@ with open("{esp_omm_system_file.name}", "w") as f:
                 with open(esp_omm_system_file.name, "r") as f:
                     esp_system = XmlSerializer.deserialize(f.read())
 
-        # Take the forces from the Espaloma system, remove the equivalent forces from "system",
-        # and add the Espaloma forces to the OpenMM system.
-        force_types_to_replace = [
-            "HarmonicBondForce",
-            "HarmonicAngleForce",
-            "PeriodicTorsionForce",
-        ]
-        # for force in system.getForces():
-        #     if force.getName() in force_types_to_replace:
-        #         system.removeForce(force)
-
-        # for force in esp_system.getForces():
-        #     if force.getName() in force_types_to_replace:
-        #         system.addForce(copy.deepcopy(force))
+        # Replace all of the forces in the system with those from Espaloma,
+        # including non-bonded forces
         while system.getNumForces() > 0:
             system.removeForce(0)
 
         for force in esp_system.getForces():
             system.addForce(copy.deepcopy(force))
-
-    # def modify_openmm_forces(
-    #     self,
-    #     interchange: Interchange,
-    #     system: openmm.System,
-    #     add_constrained_forces: bool,
-    #     constrained_pairs: Set[Tuple[int, ...]],
-    #     particle_map: Dict[Union[int, "VirtualSiteKey"], int],
-    # ) -> None:
-    #     # Mainly taken from
-    #     # https://github.com/openforcefield/openff-interchange/blob/83383b8b3af557c167e4a3003495e0e5ffbeff73/openff/interchange/interop/openmm/_valence.py#L50
-
-    #     # Rip out valence forces and replace with Espaloma,
-
-    #     # Note that we have to run espaloma part in another environment
-    #     # due to requirements conflicts (pydantic...)
-
-    #     import copy
-
-    #     import espaloma as esp
-
-    #     assert len(interchange.topology._molecules) == 1
-    #     mol_graph = esp.Graph(interchange.topology.molecule(0))
-    #     model = esp.get_model("latest")
-    #     model(mol_graph.heterograph)
-    #     esp_system = esp.graphs.deploy.openmm_system_from_graph(
-    #         mol_graph,
-    #         forcefield="openff_unconstrained-2.2.1",  # Could be any OpenFF force field - non-bonded parameters are replaced
-    #         charge_method="from-molecule",
-    #     )
-
-    #     # Take the forces from the Espaloma system, remove the equivalent forces from "system",
-    #     # and add the Espaloma forces to the OpenMM system.
-    #     force_types_to_replace = [
-    #         "HarmonicBondForce",
-    #         "HarmonicAngleForce",
-    #         "PeriodicTorsionForce",
-    #     ]
-    #     for force in system.getForces():
-    #         if force.getName() in force_types_to_replace:
-    #             system.removeForce(force)
-
-    #     for force in esp_system.getForces():
-    #         if force.getName() in force_types_to_replace:
-    #             system.addForce(copy.deepcopy(force))

@@ -1,6 +1,7 @@
 from openff.toolkit import unit
 from openff.toolkit.typing.engines.smirnoff.parameters import (
     ConstraintHandler,
+    IncompatibleParameterError,
     ParameterAttribute,
     ParameterHandler,
     ParameterType,
@@ -31,8 +32,9 @@ class EspalomaValenceHandler(ParameterHandler):
     _TAGNAME = "EspalomaValence"
     _DEPENDENCIES = []
     _INFOTYPE = None  # No separate parameter types; just a model path
-    # _MAX_SUPPORTED_SECTION_VERSION = Version("0.3")
-    # model_file = ParameterAttribute(converter=str)
+
+    # The user specifies the Python environment to run Espaloma in
+    espaloma_python_path = ParameterAttribute(default=None, converter=str)
 
     def check_handler_compatibility(
         self,
@@ -52,26 +54,27 @@ class EspalomaValenceHandler(ParameterHandler):
         IncompatibleParameterError if handler_kwargs are incompatible with existing parameters.
         """
         # TODO: exclude all other valence handlers
-        # if self.model_file != other_handler.model_file:
-        #     raise IncompatibleParameterError(
-        #         "Attempted to initialize two NAGLCharges sections with different "
-        #         "model_files: "
-        #         f"{self.model_file=} is not identical to {}"
-        #     )
+        if self.espaloma_python_path != other_handler.espaloma_python_path:
+            raise IncompatibleParameterError(
+                "Attempted to initialize two EspalomaValence sections with different "
+                "python paths: "
+                f"{self.espaloma_python_path=} is not identical to {other_handler.espaloma_python_path=}"
+            )
 
 
-class Egret1ValenceHandler(ParameterHandler):
-    """ParameterHandler for applying valence parameters from the Egret-1 model."""
+class OpenmmlValenceHandler(ParameterHandler):
+    """ParameterHandler for applying valence parameters from the OpenmmML model."""
 
-    _TAGNAME = "Egret1Valence"
+    _TAGNAME = "OpenmmlValence"
     _DEPENDENCIES = []
     _INFOTYPE = None  # No separate parameter types; just a model path
-    # _MAX_SUPPORTED_SECTION_VERSION = Version("0.3")
-    # model_file = ParameterAttribute(converter=str)
+
+    model_name = ParameterAttribute(default="aceff-2.0", converter=str)
+    model_path = ParameterAttribute(default=None, converter=str)
 
     def check_handler_compatibility(
         self,
-        other_handler: "Egret1ValenceHandler",
+        other_handler: "OpenmmlValenceHandler",
         assume_missing_is_default: bool = True,
     ):
         """
@@ -86,10 +89,13 @@ class Egret1ValenceHandler(ParameterHandler):
         ------
         IncompatibleParameterError if handler_kwargs are incompatible with existing parameters.
         """
-        # TODO: exclude all other valence handlers
-        # if self.model_file != other_handler.model_file:
-        #     raise IncompatibleParameterError(
-        #         "Attempted to initialize two NAGLCharges sections with different "
-        #         "model_files: "
-        #         f"{self.model_file=} is not identical to {}"
-        #     )
+        if (self.model_name != other_handler.model_name) or (
+            self.model_path != other_handler.model_path
+        ):
+            raise IncompatibleParameterError(
+                "Attempted to initialize two OpenmmlValence sections with different "
+                "models: "
+                f"{self.model_name=} is not identical to {other_handler.model_name=} "
+                "or "
+                f"{self.model_path=} is not identical to {other_handler.model_path=}"
+            )
