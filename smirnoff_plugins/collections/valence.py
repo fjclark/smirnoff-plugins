@@ -223,35 +223,51 @@ class EspalomaValenceCollection(SMIRNOFFCollection):
         constrained_pairs: Set[Tuple[int, ...]],
         particle_map: Dict[Union[int, "VirtualSiteKey"], int],
     ) -> None:
-        # Mainly taken from
-        # https://github.com/openforcefield/openff-interchange/blob/83383b8b3af557c167e4a3003495e0e5ffbeff73/openff/interchange/interop/openmm/_valence.py#L50
+        # Rip out valence forces and replace with Espaloma.
 
-        # Rip out valence forces and replace with Espaloma,
-
-        # Note that we have to run espaloma part in another environment
-        # due to requirements conflicts (pydantic...)
+        # Note that we have to run espaloma in another environment
+        # due to requirements conflicts (pydantic...).
         import copy
+        import fcntl
+        import hashlib
+        import os
+        import subprocess
         import tempfile
+
+        from openmm import XmlSerializer
 
         if self.espaloma_python_path is None:
             raise ValueError(
                 "espaloma_python_path must be specified for EspalomaValenceCollection/EspalomaValenceHandler"
             )
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as script_file:
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=".xml"
-            ) as esp_omm_system_file:
-                # with NamedTemporaryFile(
-                #     delete=False, suffix=".
-                script = f"""
+        smiles = interchange.topology.molecule(0).to_smiles(mapped=True)
+        smiles_hash = hashlib.sha256(smiles.encode()).hexdigest()
+
+        cache_base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+        cache_dir = os.path.join(cache_base, "smirnoff_plugins", "espaloma")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        cache_path = os.path.join(cache_dir, f"{smiles_hash}.xml")
+        lock_path = cache_path + ".lock"
+
+        with open(lock_path, "w") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                if not os.path.exists(cache_path):
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".py"
+                    ) as script_file:
+                        tmp_xml_path = cache_path + ".tmp"
+                        script = f"""
 import warnings
 warnings.filterwarnings("ignore", message="Recommend creating graphs")
+warnings.filterwarnings("ignore", module="dgl")
 import espaloma as esp
 from openff.toolkit import Molecule
 from openmm import XmlSerializer
 
-mol = Molecule.from_mapped_smiles({interchange.topology.molecule(0).to_smiles(mapped=True)!r}, allow_undefined_stereo=True)
+mol = Molecule.from_mapped_smiles({smiles!r}, allow_undefined_stereo=True)
 mol_graph = esp.Graph(mol)
 model = esp.get_model("latest")
 model(mol_graph.heterograph)
@@ -260,26 +276,29 @@ mol_graph,
 forcefield="openff_unconstrained-2.2.1",  # The default
 charge_method="nn",
 )
-# Save the OpenMM system to a file
-with open("{esp_omm_system_file.name}", "w") as f:
-    xml_data = XmlSerializer.serialize(esp_system)
-    f.write(xml_data)
+with open("{tmp_xml_path}", "w") as f:
+    f.write(XmlSerializer.serialize(esp_system))
 """
-                with open(script_file.name, "w") as f:
-                    f.write(script)
+                        with open(script_file.name, "w") as f:
+                            f.write(script)
 
-                import subprocess
+                        try:
+                            subprocess.run(
+                                [self.espaloma_python_path, script_file.name],
+                                check=True,
+                            )
+                            # Atomic rename so readers never see a partial file
+                            os.rename(tmp_xml_path, cache_path)
+                        finally:
+                            if os.path.exists(script_file.name):
+                                os.remove(script_file.name)
+                            if os.path.exists(tmp_xml_path):
+                                os.remove(tmp_xml_path)
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
 
-                subprocess.run(
-                    [self.espaloma_python_path, script_file.name],
-                    check=True,
-                )
-
-                # Load in the OpenMM system from the file
-                from openmm import XmlSerializer
-
-                with open(esp_omm_system_file.name, "r") as f:
-                    esp_system = XmlSerializer.deserialize(f.read())
+        with open(cache_path, "r") as f:
+            esp_system = XmlSerializer.deserialize(f.read())
 
         # Replace all of the forces in the system with those from Espaloma,
         # including non-bonded forces
