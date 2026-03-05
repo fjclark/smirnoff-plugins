@@ -245,6 +245,8 @@ class EspalomaValenceCollection(SMIRNOFFCollection):
                 # with NamedTemporaryFile(
                 #     delete=False, suffix=".
                 script = f"""
+import warnings
+warnings.filterwarnings("ignore", message="Recommend creating graphs")
 import espaloma as esp
 from openff.toolkit import Molecule
 from openmm import XmlSerializer
@@ -255,7 +257,7 @@ model = esp.get_model("latest")
 model(mol_graph.heterograph)
 esp_system = esp.graphs.deploy.openmm_system_from_graph(
 mol_graph,
-forcefield="openff_unconstrained-2.3.0",  # Could be any OpenFF force field - non-bonded parameters are replaced
+forcefield="openff_unconstrained-2.2.1",  # The default
 charge_method="nn",
 )
 # Save the OpenMM system to a file
