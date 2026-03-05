@@ -249,13 +249,13 @@ import espaloma as esp
 from openff.toolkit import Molecule
 from openmm import XmlSerializer
 
-mol = Molecule.from_mapped_smiles({interchange.topology.molecule(0).to_smiles(mapped=True)!r})
+mol = Molecule.from_mapped_smiles({interchange.topology.molecule(0).to_smiles(mapped=True)!r}, allow_undefined_stereo=True)
 mol_graph = esp.Graph(mol)
 model = esp.get_model("latest")
 model(mol_graph.heterograph)
 esp_system = esp.graphs.deploy.openmm_system_from_graph(
 mol_graph,
-forcefield="openff_unconstrained-2.2.1",  # Could be any OpenFF force field - non-bonded parameters are replaced
+forcefield="openff_unconstrained-2.3.0",  # Could be any OpenFF force field - non-bonded parameters are replaced
 charge_method="nn",
 )
 # Save the OpenMM system to a file
