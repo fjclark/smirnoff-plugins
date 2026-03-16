@@ -120,6 +120,13 @@ class SMIRNOFFUreyBradleyCollection(SMIRNOFFCollection):
                 k=k,
             )
 
+def get_total_charge(interchange: Interchange) -> int:
+    electrostatics = interchange["Electrostatics"]
+    total_charge = sum(
+        charge.magnitude
+        for charge in electrostatics.charges.values()
+    )
+    return int(round(total_charge))
 
 class OpenmmmlValenceCollection(SMIRNOFFCollection):
     is_plugin: bool = True
@@ -169,10 +176,13 @@ class OpenmmmlValenceCollection(SMIRNOFFCollection):
 
         assert len(interchange.topology._molecules) == 1
 
+        total_charge = get_total_charge(interchange)
+
         mlp = MLPotential(self.model_name, modelPath=self.model_path)
 
         new_system = mlp.createSystem(
             interchange.topology.to_openmm(),
+            charge=total_charge,
         )
 
         while system.getNumForces() > 0:
