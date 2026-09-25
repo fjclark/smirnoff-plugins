@@ -8,12 +8,17 @@ loaded, so it is patched lazily on the first call to ``Interchange.from_smirnoff
 """
 
 import functools
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openff.interchange import Interchange
+    from openff.toolkit import ForceField, Molecule, Topology
 
 _TAGNAME = "NAGLMBISCharges"
 
 
 @functools.cache
-def _patch_create():
+def _patch_create() -> None:
     """Patch ``openff.interchange.smirnoff._create`` to support ``NAGLMBISCharges``."""
     from openff.interchange.exceptions import MissingParameterHandlerError
     from openff.interchange.smirnoff import _create
@@ -24,12 +29,12 @@ def _patch_create():
 
     @functools.wraps(original_electrostatics)
     def _electrostatics(
-        interchange,
-        force_field,
-        topology,
-        molecules_with_preset_charges=None,
+        interchange: "Interchange",
+        force_field: "ForceField",
+        topology: "Topology",
+        molecules_with_preset_charges: "list[Molecule] | None" = None,
         allow_nonintegral_charges: bool = False,
-    ):
+    ) -> None:
         if _TAGNAME not in force_field.registered_parameter_handlers:
             return original_electrostatics(
                 interchange,
@@ -69,15 +74,15 @@ def _patch_create():
     _create._electrostatics = _electrostatics
 
 
-def install():
+def install() -> None:
     """Wrap ``Interchange.from_smirnoff`` so that ``_create`` is patched before it is first used."""
     from openff.interchange import Interchange
 
-    original_from_smirnoff = Interchange.from_smirnoff.__func__
+    original_from_smirnoff = Interchange.from_smirnoff.__func__  # type: ignore[attr-defined]
 
     @functools.wraps(original_from_smirnoff)
     def from_smirnoff(cls, *args, **kwargs):
         _patch_create()
         return original_from_smirnoff(cls, *args, **kwargs)
 
-    Interchange.from_smirnoff = classmethod(from_smirnoff)
+    Interchange.from_smirnoff = classmethod(from_smirnoff)  # type: ignore[method-assign,assignment]

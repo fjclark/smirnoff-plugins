@@ -124,7 +124,7 @@ For a more detailed example of how to use this force field to actually simulate 
 
 ## NAGL-MBIS charges
 
-The `NAGLMBISCharges` handler assigns partial charges from the pre-trained [NAGL-MBIS](https://github.com/fjclark/nagl-mbis)
+The `NAGLMBISCharges` handler assigns partial charges from the pre-trained [NAGL-MBIS](https://doi.org/10.1021/acs.jctc.5c01520)
 models, in the same way that the `NAGLCharges` section of `openff-2.3.0.offxml` assigns AM1-BCC charges from an OpenFF
 NAGL model. The charges are a mix of the charges predicted by a gas phase model and a water phase model:
 
@@ -141,8 +141,16 @@ where `alpha` (between 0 and 1) defaults to 0.5. For example, the `NAGLCharges` 
 where `gas_model` and `water_model` are optional and default to the values shown. As with `NAGLCharges`, library charges
 (e.g. for water and ions) take precedence over the NAGL-MBIS charges.
 
-`naglmbis` is not a dependency of this package. With Pixi, use the `naglmbis` environment, which contains only the
-minimal NAGL-MBIS runtime dependencies (e.g. `pixi run -e naglmbis run_tests`).
+`naglmbis` is not a dependency of this package. The version of the code required is on the
+[`feature-minimal-pixi-env` branch](https://github.com/fjclark/nagl-mbis/tree/feature-minimal-pixi-env) of
+`fjclark/nagl-mbis`. With Pixi, use the `naglmbis` environment, which installs this version with only the minimal
+NAGL-MBIS runtime dependencies (e.g. `pixi run -e naglmbis run_tests`).
+
+If you use NAGL-MBIS charges, please cite:
+
+> Charlie Adams, Joshua T. Horton, Lily Wang, Simon Boothroyd, David L. Mobley, David W. Wright, Daniel J. Cole;
+> A Graph Neural Network Charge Model Targeting Accurate Electrostatic Properties of Organic Molecules.
+> J. Chem. Theory Comput. 9 December 2025; 21 (23): 12133–12148. https://doi.org/10.1021/acs.jctc.5c01520
 
 Note that Interchange does not currently provide a hook for plugins which assign partial charges, so this plugin
 patches Interchange's (private) electrostatics creation code the first time `Interchange.from_smirnoff` is called, see

@@ -25,7 +25,7 @@ class NAGLMBISChargesHandler(_NonbondedHandler):
     """ParameterHandler for applying partially polarised NAGL-MBIS partial charges.
 
     The charges are computed with the pre-trained gas and water phase models from
-    ``naglmbis`` (https://github.com/fjclark/nagl-mbis) and mixed as
+    ``naglmbis`` (https://doi.org/10.1021/acs.jctc.5c01520) and mixed as
 
         q = (1 - alpha) * q_gas + alpha * q_water
 
@@ -37,16 +37,16 @@ class NAGLMBISChargesHandler(_NonbondedHandler):
     gas_model : str, optional, default="nagl-gas-charge-dipole-esp-wb-default"
         The name of the ``naglmbis`` model used for the gas phase charges.
     water_model : str, optional, default="nagl-water-charge-dipole-esp-wb-default"
-        The name of the ``naglmbis`` model used for the water phase charges.
+        The name of the ``naglmbis`` model used for the aqueous phase charges.
     alpha : float, optional, default=0.5
         The weight of the water phase charges, between 0 (gas phase charges only) and 1
-        (water phase charges only).
+        (aqueous phase charges only).
     version : str, optional
         The version of the NAGLMBISCharges section specification.
 
     Examples
     --------
-    >>> handler = NAGLMBISChargesHandler(alpha=0.3, skip_version_check=True)
+    >>> handler = NAGLMBISChargesHandler(alpha=0.5, skip_version_check=True)
     """
 
     _TAGNAME = "NAGLMBISCharges"

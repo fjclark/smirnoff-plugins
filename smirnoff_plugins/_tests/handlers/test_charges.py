@@ -155,3 +155,8 @@ def test_nagl_mbis_serialization():
     round_tripped = Interchange.model_validate_json(interchange.model_dump_json())
 
     assert numpy.allclose(_get_charges(round_tripped), _get_charges(interchange))
+
+    # The NAGL-MBIS provenance should survive the round trip
+    methods = {key.extras["partial_charge_method"] for key in round_tripped["Electrostatics"].key_map}
+    assert len(methods) == 1
+    assert methods.pop().startswith("NAGL-MBIS")

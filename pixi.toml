@@ -48,7 +48,7 @@ pytorch = "*"
 rdkit = "*"
 
 [feature.naglmbis.pypi-dependencies]
-naglmbis = { git = "https://github.com/fjclark/nagl-mbis", rev = "6aff69795748123032c296ec298689e6b4a41d50" }
+naglmbis = { git = "https://github.com/fjclark/nagl-mbis", rev = "f1aa746b40afaca06ab8f701a8da89d392aecab8" }
 
 [feature.py312.dependencies]
 python = "3.12.*"

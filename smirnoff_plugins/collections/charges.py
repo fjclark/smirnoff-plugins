@@ -14,7 +14,8 @@ from openff.toolkit.utils.exceptions import MissingPackageError
 from smirnoff_plugins.handlers.charges import NAGLMBISChargesHandler
 
 
-@functools.lru_cache(None)
+# Only a gas/water pair of models is normally used, so keep the (large) models cache small
+@functools.lru_cache(maxsize=4)
 def _load_model(model_name: str):
     """Load a pre-trained ``naglmbis`` charge model."""
     from naglmbis.models import load_charge_model
@@ -22,7 +23,7 @@ def _load_model(model_name: str):
     return load_charge_model(charge_model=model_name)
 
 
-@functools.lru_cache(None)
+@functools.lru_cache(maxsize=1024)
 def _compute_nagl_mbis_charges(
     mapped_smiles: str,
     gas_model: str,
@@ -47,6 +48,9 @@ def _compute_nagl_mbis_charges(
     )
     charges = polarised_model.compute_polarised_charges(molecule.to_rdkit()).detach().numpy().reshape(-1)
 
+    # The charges should already sum to the formal charge, but spread any small residual
+    # evenly over the atoms, as the OpenFF toolkit does for NAGL charges:
+    # https://github.com/openforcefield/openff-toolkit/blob/f4566b8694d7d744a70800d8f165ab05955fc334/openff/toolkit/utils/nagl_wrapper.py#L162
     return charges + (molecule.total_charge.m - charges.sum()) / molecule.n_atoms
 
 
@@ -58,8 +62,9 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
     Library charges take precedence over NAGL-MBIS charges, which take precedence over the
     other charge methods. The resulting potentials are labelled as coming from the
     ``NAGLChargesHandler`` so that the rest of Interchange (charge lookup, serialization,
-    combining, logging) treats them like any other NAGL charges; the NAGL-MBIS provenance is kept
-    in the ``partial_charge_method`` of each topology key.
+    combining, logging) treats them like any other NAGL charges. The NAGL-MBIS provenance (models
+    and alpha) is kept in ``extras["partial_charge_method"]`` of each ``SingleAtomChargeTopologyKey``,
+    which is serialized with the key map.
     """
 
     @classmethod
