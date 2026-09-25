@@ -94,7 +94,12 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
                 return library_matches, library_potentials
 
         parameter_handler = parameter_handlers["NAGLMBISCharges"]
-        mapped_smiles = unique_molecule.to_smiles(isomeric=True, explicit_hydrogens=True, mapped=True)
+        # Drop any stale atom map (e.g. from `from_smiles` on a mapped SMILES, with string keys after a
+        # JSON round trip), which would otherwise make `to_smiles` silently emit an unmapped SMILES.
+        # This is a temporary workaround until this is fixed in the OpenFF toolkit.
+        molecule = Molecule(unique_molecule)
+        molecule._properties.pop("atom_map", None)
+        mapped_smiles = molecule.to_smiles(isomeric=True, explicit_hydrogens=True, mapped=True)
 
         partial_charge_method = (
             f"NAGL-MBIS (gas_model={parameter_handler.gas_model}, "

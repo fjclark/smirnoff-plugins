@@ -129,6 +129,21 @@ def test_nagl_mbis_charged_molecule():
     assert numpy.allclose(charges, _reference_charges(acetate, 0.5), atol=1e-6)
 
 
+def test_nagl_mbis_stale_atom_map():
+    """A stale atom map with string keys (e.g. after a JSON round trip) should not break charge assignment."""
+    pytest.importorskip("naglmbis")
+
+    ethanol = Molecule.from_smiles("[H:4][C:3]([H:5])([H:6])[C:2]([H:7])([H:8])[O:1][H:9]")
+    ethanol = Molecule.from_json(ethanol.to_json())
+
+    charges = _get_charges(Interchange.from_smirnoff(_nagl_mbis_force_field(), [ethanol]))
+
+    clean_ethanol = Molecule(ethanol)
+    clean_ethanol._properties.pop("atom_map")
+
+    assert numpy.allclose(charges, _reference_charges(clean_ethanol, 0.5), atol=1e-6)
+
+
 def test_nagl_mbis_to_openmm():
     pytest.importorskip("naglmbis")
 
