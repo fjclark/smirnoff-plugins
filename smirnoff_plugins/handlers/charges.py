@@ -1,6 +1,5 @@
 from openff.toolkit.typing.engines.smirnoff.parameters import (
     ElectrostaticsHandler,
-    IncompatibleParameterError,
     LibraryChargeHandler,
     ParameterAttribute,
     _NonbondedHandler,
@@ -55,43 +54,19 @@ class NAGLMBISChargesHandler(_NonbondedHandler):
     _INFOTYPE = None  # No separate parameter types; just the model names and alpha
     _MIN_SUPPORTED_SECTION_VERSION = Version("0.1")
     _MAX_SUPPORTED_SECTION_VERSION = Version("0.1")
-    _SCALETOL = 1e-5
 
     gas_model = ParameterAttribute(default="nagl-gas-charge-dipole-esp-wb-default", converter=str)
     water_model = ParameterAttribute(default="nagl-water-charge-dipole-esp-wb-default", converter=str)
     alpha = ParameterAttribute(default=0.5, converter=_alpha_converter)
 
-    def check_handler_compatibility(
-        self,
-        other_handler: "NAGLMBISChargesHandler",
-        assume_missing_is_default: bool = True,
-    ):
-        """
-        Checks whether this ParameterHandler encodes compatible physics as another ParameterHandler. This is
-        called if a second handler is attempted to be initialized for the same tag.
-
-        Parameters
-        ----------
-        other_handler
-            The handler to compare to.
-        assume_missing_is_default
-
-        Raises
-        ------
-        IncompatibleParameterError if handler_kwargs are incompatible with existing parameters.
-        """
-        for attribute in ("gas_model", "water_model"):
-            if getattr(self, attribute) != getattr(other_handler, attribute):
-                raise IncompatibleParameterError(
-                    f"Attempted to initialize two NAGLMBISCharges sections with different {attribute} values: "
-                    f"{getattr(self, attribute)} is not identical to {getattr(other_handler, attribute)}"
-                )
-
-        if abs(self.alpha - other_handler.alpha) > self._SCALETOL:
-            raise IncompatibleParameterError(
-                "Attempted to initialize two NAGLMBISCharges sections with different alpha values: "
-                f"{self.alpha} is not identical to {other_handler.alpha}"
-            )
+    def check_handler_compatibility(self, other_handler, assume_missing_is_default: bool = True):
+        """Check that another NAGLMBISCharges section has identical models and alpha."""
+        self._check_attributes_are_equal(
+            other_handler,
+            identical_attrs=("gas_model", "water_model"),
+            tolerance_attrs=("alpha",),
+            tolerance=1e-5,
+        )
 
 
 # Interchange has no hook for plugin charge handlers, so teach it about this one.

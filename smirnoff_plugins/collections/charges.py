@@ -1,11 +1,8 @@
 import functools
-import logging
 
 import numpy
 from openff.interchange.components.potentials import Potential
 from openff.interchange.models import (
-    ChargeModelTopologyKey,
-    LibraryChargeTopologyKey,
     PotentialKey,
     SingleAtomChargeTopologyKey,
     TopologyKey,
@@ -15,10 +12,6 @@ from openff.toolkit import Molecule, Quantity
 from openff.toolkit.utils.exceptions import MissingPackageError
 
 from smirnoff_plugins.handlers.charges import NAGLMBISChargesHandler
-
-logger = logging.getLogger(__name__)
-
-_HANDLER_NAME = "NAGLMBISChargesHandler"
 
 
 @functools.lru_cache(None)
@@ -52,15 +45,9 @@ def _compute_nagl_mbis_charges(
         model_water=_load_model(water_model),
         alpha=alpha,
     )
-    charges = polarised_model.compute_polarised_charges(molecule.to_rdkit())
+    charges = polarised_model.compute_polarised_charges(molecule.to_rdkit()).detach().numpy().reshape(-1)
 
-    molecule.partial_charges = Quantity(
-        charges.detach().numpy().astype(float).reshape(-1),
-        "elementary_charge",
-    )
-    molecule._normalize_partial_charges()
-
-    return molecule.partial_charges.m_as("elementary_charge")
+    return charges + (molecule.total_charge.m - charges.sum()) / molecule.n_atoms
 
 
 class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection):
@@ -71,21 +58,14 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
     Library charges take precedence over NAGL-MBIS charges, which take precedence over the
     other charge methods. The resulting potentials are labelled as coming from the
     ``NAGLChargesHandler`` so that the rest of Interchange (charge lookup, serialization,
-    combining) treats them like any other NAGL charges; the NAGL-MBIS provenance is kept in the
-    ``extras`` of each topology key.
+    combining, logging) treats them like any other NAGL charges; the NAGL-MBIS provenance is kept
+    in the ``partial_charge_method`` of each topology key.
     """
 
     @classmethod
     def allowed_parameter_handlers(cls):
         """Return a list of allowed types of ParameterHandler classes."""
         return [*super().allowed_parameter_handlers(), NAGLMBISChargesHandler]
-
-    @classmethod
-    def parameter_handler_precedence(cls) -> list[str]:
-        """
-        Return the order in which parameter handlers take precedence when computing charges.
-        """
-        return ["LibraryCharges", "NAGLMBISCharges", "NAGLCharges", "ChargeIncrementModel", "ToolkitAM1BCC"]
 
     @classmethod
     def _find_reference_matches(
@@ -100,22 +80,15 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
             return super()._find_reference_matches(parameter_handlers, unique_molecule)
 
         if "LibraryCharges" in parameter_handlers:
-            matches, potentials = cls._find_slot_matches(parameter_handlers["LibraryCharges"], unique_molecule)
+            library_matches, library_potentials = cls._find_slot_matches(
+                parameter_handlers["LibraryCharges"],
+                unique_molecule,
+            )
 
-            matched_atom_indices = {index for key in matches for index in key.atom_indices}
+            if {index for key in library_matches for index in key.atom_indices} == set(range(unique_molecule.n_atoms)):
+                return library_matches, library_potentials
 
-            if matched_atom_indices == set(range(unique_molecule.n_atoms)):
-                return matches, potentials
-
-        return cls._find_nagl_mbis_matches(parameter_handlers["NAGLMBISCharges"], unique_molecule)
-
-    @classmethod
-    def _find_nagl_mbis_matches(
-        cls,
-        parameter_handler: NAGLMBISChargesHandler,
-        unique_molecule: Molecule,
-    ) -> tuple[dict[TopologyKey, PotentialKey], dict[PotentialKey, Potential]]:
-        """Construct a slot and potential map for the NAGL-MBIS charges of a molecule."""
+        parameter_handler = parameter_handlers["NAGLMBISCharges"]
         mapped_smiles = unique_molecule.to_smiles(isomeric=True, explicit_hydrogens=True, mapped=True)
 
         partial_charge_method = (
@@ -134,7 +107,7 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
         potentials: dict[PotentialKey, Potential] = {}
 
         for atom_index, partial_charge in enumerate(partial_charges):
-            # Label the potential as a NAGLCharges potential, as Interchange only accepts known
+            # Label the charges as NAGLCharges, as Interchange only accepts known
             # handler names when looking up charges and deserializing
             potential_key = PotentialKey(
                 id=mapped_smiles,
@@ -149,23 +122,10 @@ class SMIRNOFFNAGLMBISElectrostaticsCollection(SMIRNOFFElectrostaticsCollection)
                 SingleAtomChargeTopologyKey(
                     this_atom_index=atom_index,
                     extras={
-                        "handler": _HANDLER_NAME,
+                        "handler": "NAGLChargesHandler",
                         "partial_charge_method": partial_charge_method,
                     },
                 )
             ] = potential_key
 
         return matches, potentials
-
-    @staticmethod
-    def _log_charge_provenance(
-        unique_molecule: Molecule,
-        key: ChargeModelTopologyKey | SingleAtomChargeTopologyKey | LibraryChargeTopologyKey,
-    ):
-        if type(key) is SingleAtomChargeTopologyKey and key.extras.get("handler") == _HANDLER_NAME:
-            logger.debug(
-                f"Charge section NAGLMBISCharges, using {key.extras['partial_charge_method']}, applied to "
-                f"molecule with Hill formula {unique_molecule.to_hill_formula()}",
-            )
-        else:
-            SMIRNOFFElectrostaticsCollection._log_charge_provenance(unique_molecule, key)

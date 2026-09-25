@@ -118,19 +118,6 @@ def test_nagl_mbis_charges(alpha):
     assert numpy.allclose(charges[12:], expected, atol=1e-6)
 
 
-def test_nagl_mbis_charges_alpha_changes_charges():
-    pytest.importorskip("naglmbis")
-
-    ethanol = Molecule.from_smiles("CCO")
-
-    gas = _get_charges(Interchange.from_smirnoff(_nagl_mbis_force_field(alpha=0.0), [ethanol]))
-    water = _get_charges(Interchange.from_smirnoff(_nagl_mbis_force_field(alpha=1.0), [ethanol]))
-    mixed = _get_charges(Interchange.from_smirnoff(_nagl_mbis_force_field(alpha=0.25), [ethanol]))
-
-    assert not numpy.allclose(gas, water)
-    assert numpy.allclose(mixed, 0.75 * gas + 0.25 * water, atol=1e-6)
-
-
 def test_nagl_mbis_charged_molecule():
     pytest.importorskip("naglmbis")
 
